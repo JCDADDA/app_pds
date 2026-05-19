@@ -47,7 +47,7 @@ def bloquear_enter():
 # =============================================================
 TABELAS = {
     "receitas": ["id", "data_registro_sistema", "data_receita", "agencia", "conta_corrente", "origem_receita", "agencia_origem", "conta_origem", "natureza_receita", "valor", "nota_explicativa"],
-    "despesas": ["id", "data_registro_sistema", "data_despesa", "processo", "contrato", "cnpj_cpf", "agencia_pagadora", "conta_pagadora", "natureza_despesa", "valor", "nota_explicativa"],
+    "despesas": ["id", "data_registro_sistema", "data_despesa", "nota_fiscal", "contrato", "cnpj_cpf", "agencia_pagadora", "conta_pagadora", "natureza_despesa", "valor", "nota_explicativa"],
     "usuarios": ["id", "data_registro_sistema", "nome_completo", "data_nascimento", "cpf", "estado", "cidade", "rua", "numero", "bairro", "cep"],
     "bancos": ["id", "data_registro_sistema", "nome_banco", "numero_agencia", "numero_conta_corrente", "nome_conta"],
     "credores": ["id", "data_registro_sistema", "cnpj_cpf", "nome_credor", "estado", "cidade", "rua", "numero", "cep", "agencia_credor", "conta_credor"],
@@ -223,7 +223,7 @@ def tela_despesa():
             # Reúne TODOS os dados em um único dicionário para a tabela
             dados = {
                 "data_despesa": data_desp.strftime("%d/%m/%Y"),
-                "processo": processo,
+                "nota_fiscal": nota_fiscal,
                 "contrato": contrato,
                 "cnpj_cpf": cnpj_puro,
                 "agencia_pagadora": agencia_deb,
