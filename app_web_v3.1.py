@@ -191,7 +191,7 @@ def tela_despesa():
         
         with col1:
             data_desp = st.date_input("Data da Despesa", format="DD/MM/YYYY")
-            processo = st.text_input("Processo nº")
+            nota_fiscal = st.text_input("Nota fiscal nº")
             contrato = st.text_input("Contrato nº")
             
         with col2:
