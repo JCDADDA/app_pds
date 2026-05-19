@@ -332,15 +332,63 @@ def tela_cadastro_colaborador():
             salvar_registro_excel("colaboradores", dados)
             st.success("Colaborador cadastrado com sucesso!")
 
+# =============================================================
+# SISTEMA DE LOGIN
+# =============================================================
+def checar_login():
+    # Se a variável 'logado' não existir na sessão, cria como Falso
+    if "logado" not in st.session_state:
+        st.session_state["logado"] = False
+
+    # Se não estiver logado, mostra a tela de login
+    if not st.session_state["logado"]:
+        st.title("Acesso Restrito")
+        st.markdown("Por favor, faça o login para acessar o sistema de Gestão Partidária.")
+        
+        # Formulário de Login
+        usuario = st.text_input("Usuário")
+        senha = st.text_input("Senha", type="password") # type="password" esconde a senha
+        
+        if st.button("Entrar", type="primary"):
+            # Puxa os usuários cadastrados no cofre do Streamlit
+            usuarios_cadastrados = st.secrets["usuarios"]
+            
+            # Verifica se o usuário existe e se a senha está correta
+            if usuario in usuarios_cadastrados and usuarios_cadastrados[usuario] == senha:
+                st.session_state["logado"] = True
+                st.session_state["usuario_atual"] = usuario
+                st.rerun() # Recarrega a página agora logado
+            else:
+                st.error("Usuário ou senha incorretos.")
+        
+        # Retorna Falso para impedir que o resto do app carregue
+        return False
+    
+    # Se já estiver logado, retorna Verdadeiro
+    return True
+
 
 # =============================================================
-# O MOTOR DO PROGRAMA (MENU LATERAL)
+# O MOTOR DO PROGRAMA (MENU LATERAL E CATRACA)
 # =============================================================
 def main():
+    # 1. A Catraca: Se o login retornar False, o código para aqui e não mostra o menu
+    if not checar_login():
+        return 
+
+    # 2. Se passou da catraca, carrega o sistema normalmente
     bloquear_enter() # Chama a função que trava o Enter nos formulários do site
         
     st.sidebar.title("PSD")
     st.sidebar.markdown("Contábil - (Receita x Despesa)")
+    
+    # Mostra quem está logado e um botão para sair
+    st.sidebar.markdown(f"Logado como: **{st.session_state['usuario_atual']}**")
+    if st.sidebar.button("Sair / Logout"):
+        st.session_state["logado"] = False
+        st.rerun()
+
+    st.sidebar.divider()
     
     menu = st.sidebar.radio(
         "Selecione uma opção:",
