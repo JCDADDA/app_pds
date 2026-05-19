@@ -23,7 +23,7 @@ df_colaboradores = pd.read_excel(caminh_arquivo, sheet_name='colaboradores', eng
 # =============================================================
 # CARREGANDO DADOS DA PRESTAÇÃO DE CONTAS DE 2024
 # =============================================================
-extrato_bancario_pca = r"G:\Meu Drive\PESSOAL\psd\extrato_bancario_partido\extrato_partido_.xlsx"
+extrato_bancario_pca = "extrato_partido_.xlsx"
 extrato_bancario_pca = pd.read_excel(extrato_bancario_pca)
 
 # =============================================================
