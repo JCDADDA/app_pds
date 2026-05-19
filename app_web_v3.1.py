@@ -2,23 +2,14 @@ import streamlit as st
 import streamlit.components.v1 as components # NOVO: Importação para injetar o bloqueio do teclado
 from pathlib import Path
 from datetime import datetime
-from openpyxl import Workbook, load_workbook
 import pandas as pd 
+import gspread
+from google.oauth2.service_account import Credentials
 
 # =============================================================
 # CARREGANDO DADOS REGISTRADOS NO BANCO DE DADOS
 # =============================================================
 
-caminh_arquivo = 'base_dados_partido.xlsx'
-
-# 2. Importamos cada tabela (aba) para um DataFrame diferente
-# Usamos engine='openpyxl' para garantir a leitura correta do formato .xlsx [10]
-df_receitas = pd.read_excel(caminh_arquivo, sheet_name='receitas', engine='openpyxl')
-df_despesas = pd.read_excel(caminh_arquivo, sheet_name='despesas', engine='openpyxl')
-df_usuarios = pd.read_excel(caminh_arquivo, sheet_name='usuarios', engine='openpyxl')
-df_bancos = pd.read_excel(caminh_arquivo, sheet_name='bancos', engine='openpyxl')
-df_credores = pd.read_excel(caminh_arquivo, sheet_name='credores', engine='openpyxl')
-df_colaboradores = pd.read_excel(caminh_arquivo, sheet_name='colaboradores', engine='openpyxl')
 
 # =============================================================
 # CARREGANDO DADOS DA PRESTAÇÃO DE CONTAS DE 2024
@@ -52,10 +43,8 @@ def bloquear_enter():
     )
 
 # =============================================================
-# CRIANDO ESTRUTURA DO BANCO EM EXCEL (Lógica Intacta)
+# CRIANDO ESTRUTURA DO BANCO EM EXCEL (Lógica Intacta) - NOVA LÓGICA DE BANCO DE DADOS: GOOGLE SHEETS
 # =============================================================
-ARQUIVO_BD = Path("base_dados_partido.xlsx")
-
 TABELAS = {
     "receitas": ["id", "data_registro_sistema", "data_receita", "agencia", "conta_corrente", "origem_receita", "agencia_origem", "conta_origem", "natureza_receita", "valor", "nota_explicativa"],
     "despesas": ["id", "data_registro_sistema", "data_despesa", "processo", "contrato", "cnpj_cpf", "agencia_pagadora", "conta_pagadora", "natureza_despesa", "valor", "nota_explicativa"],
@@ -65,39 +54,28 @@ TABELAS = {
     "colaboradores": ["id", "data_registro_sistema", "cpf", "data_nascimento", "nome_completo", "estado", "cidade", "rua", "numero", "cep", "carteira_trabalho"]
 }
 
-def inicializar_arquivo_excel():
-    if not ARQUIVO_BD.exists():
-        wb = Workbook()
-        wb.remove(wb.active)
-        for nome_aba, cabecalhos in TABELAS.items():
-            ws = wb.create_sheet(nome_aba)
-            ws.append(cabecalhos)
-        wb.save(ARQUIVO_BD)
-        return
+@st.cache_resource # Isso evita que o app reconecte com o Google a cada clique
+def conectar_planilha():
+    dados_credenciais = st.secrets["gcp_service_account"]
+    escopos = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    credenciais = Credentials.from_service_account_info(dados_credenciais, scopes=escopos)
+    cliente = gspread.authorize(credenciais)
+    return cliente.open("base_dados_partido") # O nome exato da sua planilha no Google Drive
 
-    wb = load_workbook(ARQUIVO_BD)
-    precisa_salvar = False
-    for nome_aba, cabecalhos in TABELAS.items():
-        if nome_aba not in wb.sheetnames:
-            ws = wb.create_sheet(nome_aba)
-            ws.append(cabecalhos)
-            precisa_salvar = True
-    if precisa_salvar:
-        wb.save(ARQUIVO_BD)
-
-def proximo_id(ws):
-    if ws.max_row == 1: return 1
-    ultimo_id = ws.cell(row=ws.max_row, column=1).value
+def proximo_id_nuvem(aba):
+    valores = aba.col_values(1) # Pega todos os valores da coluna A (id)
+    if len(valores) <= 1:
+        return 1
     try:
-        return int(ultimo_id) + 1
+        return int(valores[-1]) + 1
     except:
-        return ws.max_row
+        return len(valores)
 
+# Mantivemos o nome 'salvar_registro_excel' para você não precisar mudar os formulários
 def salvar_registro_excel(nome_aba, dados):
-    inicializar_arquivo_excel()
-    wb = load_workbook(ARQUIVO_BD)
-    ws = wb[nome_aba]
-    novo_id = proximo_id(ws)
+    planilha = conectar_planilha()
+    aba = planilha.worksheet(nome_aba)
+    novo_id = proximo_id_nuvem(aba)
 
     dados_completos = {
         "id": novo_id,
@@ -105,29 +83,29 @@ def salvar_registro_excel(nome_aba, dados):
         **dados
     }
     
-    linha = [dados_completos.get(coluna, "") for coluna in TABELAS[nome_aba]]
-    ws.append(linha)
-    wb.save(ARQUIVO_BD)
+    linha = [str(dados_completos.get(coluna, "")) for coluna in TABELAS[nome_aba]]
+    aba.append_row(linha)
 
 def carregar_contas_bancarias():
-    inicializar_arquivo_excel()
-    wb = load_workbook(ARQUIVO_BD)
-    if "bancos" not in wb.sheetnames: return []
-    ws = wb["bancos"]
-    if ws.max_row <= 1: return []
-    
-    cabecalhos = [str(c.value).strip() if c.value else "" for c in ws[1]]
-    return [dict(zip(cabecalhos, linha)) for linha in ws.iter_rows(min_row=2, values_only=True) if dict(zip(cabecalhos, linha)).get("numero_agencia")]
+    planilha = conectar_planilha()
+    aba = planilha.worksheet("bancos")
+    registros = aba.get_all_records()
+    return [r for r in registros if r.get("numero_agencia")]
 
 def carregar_credores():
-    inicializar_arquivo_excel()
-    wb = load_workbook(ARQUIVO_BD)
-    if "credores" not in wb.sheetnames: return []
-    ws = wb["credores"]
-    if ws.max_row <= 1: return []
-    
-    cabecalhos = [str(c.value).strip() if c.value else "" for c in ws[1]]
-    return [dict(zip(cabecalhos, linha)) for linha in ws.iter_rows(min_row=2, values_only=True) if dict(zip(cabecalhos, linha)).get("cnpj_cpf")]
+    planilha = conectar_planilha()
+    aba = planilha.worksheet("credores")
+    registros = aba.get_all_records()
+    return [r for r in registros if r.get("cnpj_cpf")]
+
+def carregar_dataframe(nome_aba):
+    """Função extra para exibir as tabelas na tela do Streamlit"""
+    planilha = conectar_planilha()
+    aba = planilha.worksheet(nome_aba)
+    dados = aba.get_all_records()
+    if not dados:
+        return pd.DataFrame(columns=TABELAS[nome_aba])
+    return pd.DataFrame(dados)
 
 
 # =============================================================
@@ -290,7 +268,7 @@ def tela_cadastro_usuario():
             st.success("Usuário cadastrado com sucesso!")
     
     st.header("Usuários Cadastrados")
-    st.dataframe(df_usuarios)
+    st.dataframe(carregar_dataframe("usuarios"))
 
 
 def tela_cadastro_banco():
@@ -306,7 +284,7 @@ def tela_cadastro_banco():
             st.success("Banco cadastrado com sucesso!")
     
     st.header("Bancos Cadastrados")
-    st.dataframe(df_bancos)
+    st.dataframe(carregar_dataframe("bancos"))
 
 
 def tela_cadastro_credor():
@@ -331,7 +309,7 @@ def tela_cadastro_credor():
             st.success("Credor cadastrado com sucesso!")
 
     st.header("Credores Cadastrados")
-    st.dataframe(df_credores)
+    st.dataframe(carregar_dataframe("credores"))
 
 def tela_cadastro_colaborador():
     st.header("Cadastrar Colaborador")
@@ -360,8 +338,7 @@ def tela_cadastro_colaborador():
 # =============================================================
 def main():
     bloquear_enter() # Chama a função que trava o Enter nos formulários do site
-    inicializar_arquivo_excel() # Garante que o banco existe
-    
+        
     st.sidebar.title("PSD")
     st.sidebar.markdown("Contábil - (Receita x Despesa)")
     
