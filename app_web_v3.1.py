@@ -332,6 +332,52 @@ def tela_cadastro_colaborador():
             salvar_registro_excel("colaboradores", dados)
             st.success("Colaborador cadastrado com sucesso!")
 
+def tela_relatorio_despesa():
+    st.header("Relatório da Despesa")
+    
+    # 1. Carrega os dados usando a função que já usa o CACHE (muito mais rápido!)
+    df_despesa = carregar_dataframe("despesas")
+
+    # 2. Verifica se o DataFrame não está vazio antes de tentar tratar
+    if not df_despesa.empty: # Se o DataFrame não estiver vazio faça:
+
+        # Garante que a coluna valor é texto antes de limpar
+        df_despesa['valor'] = df_despesa['valor'].astype(str)
+
+        # Tratamento dos dados contidos na Variável "Valor"
+        df_despesa['valor'] = df_despesa['valor'].str.replace('R$', "", regex=False).str.strip()
+        df_despesa['valor'] = df_despesa['valor'].str.replace('.', "", regex=False)
+        df_despesa['valor'] = df_despesa['valor'].str.replace(',', '.', regex=False)
+        df_despesa['valor'] = pd.to_numeric(df_despesa['valor'])
+
+        # Calcular o somatório
+        soma_total = df_despesa['valor'].sum()
+
+        # Criar a linha de total
+        linha_total = pd.DataFrame([{
+            'id': '', 
+            'data_registro_sistema': 'TOTAL DA DESPESA',
+            'data_despesa': "",
+            'nota_fiscal': "",
+            'contrato': "",
+            'cnpj_cpf': "",
+            'agencia_pagadora': "",
+            'conta_pagadora': "",
+            'natureza_despesa': "",
+            'valor': soma_total,
+            'nota_explicativa': ""
+        }])
+
+        # Juntar a linha do total no topo do DataFrame
+        df_despesa = pd.concat([linha_total, df_despesa], ignore_index=True)
+
+        # Exibe a tabela na tela (sem precisar de formulário)
+        st.dataframe(df_despesa, use_container_width=True)
+
+    else:
+        st.warning("Nenhuma despesa registrada até o momento.")
+
+
 # =============================================================
 # SISTEMA DE LOGIN
 # =============================================================
@@ -392,7 +438,13 @@ def main():
     
     menu = st.sidebar.radio(
         "Selecione uma opção:",
-        ["Registrar Receita", "Registrar Despesa", "Cadastrar Usuário", "Cadastrar Banco", "Cadastrar Credor", "Cadastro de Colaboradores"]
+        ["Registrar Receita", 
+         "Registrar Despesa", 
+         #"Cadastrar Usuário", # Ao inserir o "#" desabilitei a tela "Cadastrar Usuário"
+         "Cadastrar Banco", 
+         "Cadastrar Credor", 
+         #"Cadastro de Colaboradores", # Ao inserir o "#" desabilitei a tela "Cadastro de Colaboradores"
+         "Relatório da Despesa"]
     )
     
     if menu == "Registrar Receita":
@@ -407,6 +459,8 @@ def main():
         tela_cadastro_credor()
     elif menu == "Cadastro de Colaboradores":
         tela_cadastro_colaborador()
+    elif menu == "Relatório da Despesa":
+        tela_relatorio_despesa()
 
 # Comando para iniciar o Streamlit
 if __name__ == "__main__":
