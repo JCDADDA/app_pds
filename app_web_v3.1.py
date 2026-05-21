@@ -600,7 +600,8 @@ def main():
 
 # Comando para iniciar o Streamlit
 if __name__ == "__main__":
-    main()
+    if checar_login():
+        main()
 
 
 
