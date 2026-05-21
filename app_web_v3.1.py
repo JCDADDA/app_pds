@@ -2,9 +2,15 @@ import streamlit as st
 import streamlit.components.v1 as components # NOVO: Importação para injetar o bloqueio do teclado
 from pathlib import Path
 from datetime import datetime
+import io
+import mimetypes
+import re
+
 import pandas as pd 
 import gspread
 from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
 
 # =============================================================
 # CARREGANDO DADOS REGISTRADOS NO BANCO DE DADOS
@@ -47,20 +53,106 @@ def bloquear_enter():
 # =============================================================
 TABELAS = {
     "receitas": ["id", "data_registro_sistema", "data_receita", "agencia", "conta_corrente", "origem_receita", "agencia_origem", "conta_origem", "natureza_receita", "valor", "nota_explicativa"],
-    "despesas": ["id", "data_registro_sistema", "data_despesa", "nota_fiscal", "contrato", "cnpj_cpf", "agencia_pagadora", "conta_pagadora", "natureza_despesa", "valor", "nota_explicativa"],
+    "despesas": ["id", "data_registro_sistema", "data_despesa", "nota_fiscal", "contrato", "cnpj_cpf", "agencia_pagadora", "conta_pagadora", "natureza_despesa", "valor", "nota_explicativa", "comprovante_nome_arquivo", "comprovante_drive_id", "comprovante_drive_link"],
     "usuarios": ["id", "data_registro_sistema", "nome_completo", "data_nascimento", "cpf", "estado", "cidade", "rua", "numero", "bairro", "cep"],
     "bancos": ["id", "data_registro_sistema", "nome_banco", "numero_agencia", "numero_conta_corrente", "nome_conta"],
     "credores": ["id", "data_registro_sistema", "cnpj_cpf", "nome_credor", "estado", "cidade", "rua", "numero", "cep", "agencia_credor", "conta_credor"],
     "colaboradores": ["id", "data_registro_sistema", "cpf", "data_nascimento", "nome_completo", "estado", "cidade", "rua", "numero", "cep", "carteira_trabalho"]
 }
 
+@st.cache_resource
+def criar_credenciais_google():
+    """Cria uma credencial única para Google Sheets e Google Drive."""
+    dados_credenciais = st.secrets["gcp_service_account"]
+    escopos = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive",
+    ]
+    return Credentials.from_service_account_info(dados_credenciais, scopes=escopos)
+
+
 @st.cache_resource # Isso evita que o app reconecte com o Google a cada clique
 def conectar_planilha():
-    dados_credenciais = st.secrets["gcp_service_account"]
-    escopos = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    credenciais = Credentials.from_service_account_info(dados_credenciais, scopes=escopos)
+    credenciais = criar_credenciais_google()
     cliente = gspread.authorize(credenciais)
     return cliente.open("base_dados_partido") # O nome exato da sua planilha no Google Drive
+
+
+@st.cache_resource
+def conectar_drive():
+    """Conecta na API do Google Drive usando a mesma conta de serviço."""
+    credenciais = criar_credenciais_google()
+    return build("drive", "v3", credentials=credenciais)
+
+
+def obter_id_pasta_comprovantes():
+    """Lê dos secrets o ID da pasta do Google Drive onde ficarão os comprovantes."""
+    try:
+        return st.secrets["google_drive"]["comprovantes_folder_id"]
+    except Exception:
+        return st.secrets["GOOGLE_DRIVE_COMPROVANTES_FOLDER_ID"]
+
+
+def limpar_texto_arquivo(texto):
+    """Remove caracteres que podem atrapalhar o nome do arquivo no Drive."""
+    texto = str(texto or "sem_numero").strip().lower()
+    texto = re.sub(r"[^a-z0-9_-]+", "_", texto)
+    return texto.strip("_") or "sem_numero"
+
+
+def salvar_comprovante_drive(arquivo, id_despesa, data_registro, nota_fiscal):
+    """
+    Salva o comprovante no Google Drive e retorna os dados necessários
+    para vincular o arquivo à linha da despesa no Google Sheets.
+    """
+    drive = conectar_drive()
+    pasta_id = obter_id_pasta_comprovantes()
+
+    extensao = Path(arquivo.name).suffix.lower() or ".pdf"
+    data_nome = data_registro.strftime("%Y%m%d_%H%M%S")
+    nf_nome = limpar_texto_arquivo(nota_fiscal)
+    nome_arquivo = f"despesa_{int(id_despesa):06d}_{data_nome}_nf_{nf_nome}{extensao}"
+
+    mime_type = arquivo.type or mimetypes.guess_type(nome_arquivo)[0] or "application/octet-stream"
+    media = MediaIoBaseUpload(
+        io.BytesIO(arquivo.getvalue()),
+        mimetype=mime_type,
+        resumable=False,
+    )
+
+    metadados = {
+        "name": nome_arquivo,
+        "parents": [pasta_id],
+    }
+
+    arquivo_drive = drive.files().create(
+        body=metadados,
+        media_body=media,
+        fields="id, name, webViewLink",
+        supportsAllDrives=True,
+    ).execute()
+
+    return {
+        "comprovante_nome_arquivo": arquivo_drive.get("name", nome_arquivo),
+        "comprovante_drive_id": arquivo_drive.get("id", ""),
+        "comprovante_drive_link": arquivo_drive.get("webViewLink", ""),
+    }
+
+
+def garantir_cabecalho_planilha(aba, nome_aba):
+    """Garante que a aba possui todas as colunas esperadas no cabeçalho."""
+    colunas_esperadas = TABELAS[nome_aba]
+    cabecalho_atual = aba.row_values(1)
+
+    if not cabecalho_atual:
+        aba.append_row(colunas_esperadas)
+        return
+
+    colunas_faltantes = [col for col in colunas_esperadas if col not in cabecalho_atual]
+    if colunas_faltantes:
+        novo_cabecalho = cabecalho_atual + colunas_faltantes
+        aba.update("A1", [novo_cabecalho])
+
 
 def proximo_id_nuvem(aba):
     valores = aba.col_values(1) # Pega todos os valores da coluna A (id)
@@ -72,19 +164,23 @@ def proximo_id_nuvem(aba):
         return len(valores)
 
 # Mantivemos o nome 'salvar_registro_excel' para você não precisar mudar os formulários
-def salvar_registro_excel(nome_aba, dados):
+def salvar_registro_excel(nome_aba, dados, id_predefinido=None, data_registro_sistema=None):
     planilha = conectar_planilha()
     aba = planilha.worksheet(nome_aba)
-    novo_id = proximo_id_nuvem(aba)
+    garantir_cabecalho_planilha(aba, nome_aba)
+
+    novo_id = id_predefinido if id_predefinido is not None else proximo_id_nuvem(aba)
+    data_sistema = data_registro_sistema or datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
     dados_completos = {
         "id": novo_id,
-        "data_registro_sistema": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+        "data_registro_sistema": data_sistema,
         **dados
     }
     
     linha = [str(dados_completos.get(coluna, "")) for coluna in TABELAS[nome_aba]]
     aba.append_row(linha)
+    return dados_completos
 
 def carregar_contas_bancarias():
     planilha = conectar_planilha()
@@ -106,6 +202,8 @@ def carregar_dataframe(nome_aba):
     if not dados:
         return pd.DataFrame(columns=TABELAS[nome_aba])
     return pd.DataFrame(dados)
+
+
 
 
 # =============================================================
@@ -206,12 +304,24 @@ def tela_despesa():
 
         # Caixa de texto para Justificativa, que pode ser usada para detalhar a despesa, justificar o motivo, ou qualquer informação adicional relevante.
         nota_explicativa = st.text_area("Justificativa")
+
+        st.divider()
+        st.subheader("Comprovante da Despesa")
+        comprovante = st.file_uploader(
+            "Anexar comprovante / nota fiscal",
+            type=["pdf", "png", "jpg", "jpeg"],
+            help="Envie preferencialmente em PDF. Também são aceitas imagens PNG/JPG.",
+        )
         
         # O BOTÃO DE ENVIO DO FORMULÁRIO FICA POR ÚLTIMO, APÓS TODAS AS SELEÇÕES E CAMPOS DE TEXTO
         submit = st.form_submit_button("Salvar Despesa", type="primary")
         
         # 4. SALVAMENTO UNIFICADO
         if submit:
+            if comprovante is None:
+                st.warning("Anexe o comprovante da despesa antes de salvar o registro.")
+                st.stop()
+
             # Extrai apenas o CNPJ
             cnpj_puro = credor_selecionado.split(" - ")[0]
             
@@ -219,6 +329,26 @@ def tela_despesa():
             partes_conta = conta_selecionada.split(" | ")
             agencia_deb = partes_conta[0].replace("Agência: ", "")
             conta_deb = partes_conta[1].replace("Conta: ", "")
+
+            # Define ID e data antes de salvar, para que a linha da planilha
+            # e o arquivo no Google Drive tenham o mesmo identificador.
+            planilha = conectar_planilha()
+            aba_despesas = planilha.worksheet("despesas")
+            garantir_cabecalho_planilha(aba_despesas, "despesas")
+            novo_id = proximo_id_nuvem(aba_despesas)
+            data_registro = datetime.now()
+            data_registro_texto = data_registro.strftime("%d/%m/%Y %H:%M:%S")
+
+            try:
+                dados_comprovante = salvar_comprovante_drive(
+                    arquivo=comprovante,
+                    id_despesa=novo_id,
+                    data_registro=data_registro,
+                    nota_fiscal=nota_fiscal,
+                )
+            except Exception as erro:
+                st.error(f"Não foi possível salvar o comprovante no Google Drive: {erro}")
+                st.stop()
             
             # Reúne TODOS os dados em um único dicionário para a tabela
             dados = {
@@ -230,12 +360,19 @@ def tela_despesa():
                 "conta_pagadora": conta_deb,
                 "natureza_despesa": natureza_desp,
                 "valor": f"R$ {valor_desp:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
-                "nota_explicativa": nota_explicativa
+                "nota_explicativa": nota_explicativa,
+                **dados_comprovante,
             }
             
             # Salva na aba 'despesas'
-            salvar_registro_excel("despesas", dados)
-            st.success("Despesa registrada com sucesso!")
+            registro_salvo = salvar_registro_excel(
+                "despesas",
+                dados,
+                id_predefinido=novo_id,
+                data_registro_sistema=data_registro_texto,
+            )
+            st.success(f"Despesa ID {registro_salvo['id']} registrada com sucesso!")
+            st.markdown(f"[Abrir comprovante no Google Drive]({registro_salvo['comprovante_drive_link']})")
 
 
 def tela_cadastro_usuario():
@@ -365,18 +502,30 @@ def tela_relatorio_despesa():
             'conta_pagadora': "",
             'natureza_despesa': "",
             'valor': soma_total,
-            'nota_explicativa': ""
+            'nota_explicativa': "",
+            'comprovante_nome_arquivo': "",
+            'comprovante_drive_id': "",
+            'comprovante_drive_link': ""
         }])
 
         # Juntar a linha do total no topo do DataFrame
         df_despesa = pd.concat([linha_total, df_despesa], ignore_index=True)
 
         # Exibe a tabela na tela (sem precisar de formulário)
-        st.dataframe(df_despesa, use_container_width=True)
+        if "comprovante_drive_link" in df_despesa.columns:
+            st.dataframe(
+                df_despesa,
+                use_container_width=True,
+                column_config={
+                    "comprovante_drive_link": st.column_config.LinkColumn("Comprovante")
+                },
+            )
+        else:
+            st.dataframe(df_despesa, use_container_width=True)
 
     else:
         st.warning("Nenhuma despesa registrada até o momento.")
-
+    
 
 # =============================================================
 # SISTEMA DE LOGIN
@@ -415,28 +564,15 @@ def checar_login():
 
 
 # =============================================================
-# O MOTOR DO PROGRAMA (MENU LATERAL E CATRACA)
+# O MOTOR DO PROGRAMA (MENU LATERAL)
 # =============================================================
 def main():
-    # 1. A Catraca: Se o login retornar False, o código para aqui e não mostra o menu
-    if not checar_login():
-        return 
-
-    # 2. Se passou da catraca, carrega o sistema normalmente
     bloquear_enter() # Chama a função que trava o Enter nos formulários do site
         
     st.sidebar.title("PSD")
     st.sidebar.markdown("Contábil - (Receita x Despesa)")
     
-    # Mostra quem está logado e um botão para sair
-    st.sidebar.markdown(f"Logado como: **{st.session_state['usuario_atual']}**")
-    if st.sidebar.button("Sair / Logout"):
-        st.session_state["logado"] = False
-        st.rerun()
-
-    st.sidebar.divider()
-    
-    menu = st.sidebar.radio(
+    menu = st.sidebar.selectbox(
         "Selecione uma opção:",
         ["Registrar Receita", 
          "Registrar Despesa", 
@@ -465,3 +601,6 @@ def main():
 # Comando para iniciar o Streamlit
 if __name__ == "__main__":
     main()
+
+
+
