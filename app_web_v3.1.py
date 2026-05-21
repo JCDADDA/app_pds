@@ -60,15 +60,29 @@ TABELAS = {
     "colaboradores": ["id", "data_registro_sistema", "cpf", "data_nascimento", "nome_completo", "estado", "cidade", "rua", "numero", "cep", "carteira_trabalho"]
 }
 
+#@st.cache_resource
+#def criar_credenciais_google():
+#    """Cria uma credencial única para Google Sheets e Google Drive."""
+#    dados_credenciais = st.secrets["gcp_service_account"]
+#    escopos = [
+#        "https://www.googleapis.com/auth/spreadsheets",
+#        "https://www.googleapis.com/auth/drive",
+#    ]
+#    return Credentials.from_service_account_info(dados_credenciais, scopes=escopos)
+
 @st.cache_resource
 def criar_credenciais_google():
-    """Cria uma credencial única para Google Sheets e Google Drive."""
-    dados_credenciais = st.secrets["gcp_service_account"]
+    """Cria credencial usando o Token OAuth do usuário (Conta de 5TB)."""
+    # Puxamos o dicionário do secrets e transformamos a chave
+    dados_token = dict(st.secrets["google_oauth_token"])
+    
     escopos = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
     ]
-    return Credentials.from_service_account_info(dados_credenciais, scopes=escopos)
+    
+    # Gera as credenciais dizendo: "Eu sou o dono da conta"
+    return Credentials.from_authorized_user_info(dados_token, scopes=escopos)
 
 
 @st.cache_resource # Isso evita que o app reconecte com o Google a cada clique
