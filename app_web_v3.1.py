@@ -54,7 +54,7 @@ def bloquear_enter():
 # =============================================================
 TABELAS = {
     "receitas": ["id", "data_registro_sistema", "data_receita", "agencia", "conta_corrente", "origem_receita", "agencia_origem", "conta_origem", "natureza_receita", "valor", "nota_explicativa"],
-    "despesas": ["id", "data_registro_sistema", "data_despesa", "nota_fiscal", "contrato", "cnpj_cpf", "agencia_pagadora", "conta_pagadora", "natureza_despesa", "valor", "nota_explicativa", "comprovante_nome_arquivo", "comprovante_drive_id", "comprovante_drive_link"],
+    "despesas": ["id", "data_registro_sistema", "data_despesa", "comprovante", "contrato", "cnpj_cpf", "agencia_pagadora", "conta_pagadora", "natureza_despesa", "valor", "nota_explicativa", "comprovante_nome_arquivo", "comprovante_drive_id", "comprovante_drive_link"],
     "usuarios": ["id", "data_registro_sistema", "nome_completo", "data_nascimento", "cpf", "estado", "cidade", "rua", "numero", "bairro", "cep"],
     "bancos": ["id", "data_registro_sistema", "nome_banco", "numero_agencia", "numero_conta_corrente", "nome_conta"],
     "credores": ["id", "data_registro_sistema", "cnpj_cpf", "nome_credor", "estado", "cidade", "rua", "numero", "cep", "agencia_credor", "conta_credor"],
@@ -115,7 +115,7 @@ def limpar_texto_arquivo(texto):
     return texto.strip("_") or "sem_numero"
 
 
-def salvar_comprovante_drive(arquivo, id_despesa, data_registro, nota_fiscal):
+def salvar_comprovante_drive(arquivo, id_despesa, data_registro, comprovante):
     """
     Salva o comprovante no Google Drive e retorna os dados necessários
     para vincular o arquivo à linha da despesa no Google Sheets.
@@ -125,7 +125,7 @@ def salvar_comprovante_drive(arquivo, id_despesa, data_registro, nota_fiscal):
 
     extensao = Path(arquivo.name).suffix.lower() or ".pdf"
     data_nome = data_registro.strftime("%Y%m%d_%H%M%S")
-    nf_nome = limpar_texto_arquivo(nota_fiscal)
+    nf_nome = limpar_texto_arquivo(comprovante)
     nome_arquivo = f"despesa_{int(id_despesa):06d}_{data_nome}_nf_{nf_nome}{extensao}"
 
     mime_type = arquivo.type or mimetypes.guess_type(nome_arquivo)[0] or "application/octet-stream"
@@ -304,7 +304,7 @@ def tela_despesa():
         
         with col1:
             data_desp = st.date_input("Data da Despesa", format="DD/MM/YYYY")
-            nota_fiscal = st.text_input("Nota fiscal nº")
+            comprovante = st.text_input("Comprovante:")
             contrato = st.text_input("Contrato nº")
             
         with col2:
@@ -323,7 +323,7 @@ def tela_despesa():
         st.divider()
         st.subheader("Comprovante da Despesa")
         comprovante = st.file_uploader(
-            "Anexar comprovante / nota fiscal",
+            "Anexar comprovante / Comprovante",
             type=["pdf", "png", "jpg", "jpeg"],
             help="Envie preferencialmente em PDF. Também são aceitas imagens PNG/JPG.",
         )
@@ -359,7 +359,7 @@ def tela_despesa():
                     arquivo=comprovante,
                     id_despesa=novo_id,
                     data_registro=data_registro,
-                    nota_fiscal=nota_fiscal,
+                    comprovante=comprovante,
                 )
             except Exception as erro:
                 st.error(f"Não foi possível salvar o comprovante no Google Drive: {erro}")
@@ -368,7 +368,7 @@ def tela_despesa():
             # Reúne TODOS os dados em um único dicionário para a tabela
             dados = {
                 "data_despesa": data_desp.strftime("%d/%m/%Y"),
-                "nota_fiscal": nota_fiscal,
+                "comprovante": comprovante,
                 "contrato": contrato,
                 "cnpj_cpf": cnpj_puro,
                 "agencia_pagadora": agencia_deb,
@@ -510,7 +510,7 @@ def tela_relatorio_despesa():
             'id': '', 
             'data_registro_sistema': 'TOTAL DA DESPESA',
             'data_despesa': "",
-            'nota_fiscal': "",
+            'comprovante': "",
             'contrato': "",
             'cnpj_cpf': "",
             'agencia_pagadora': "",
