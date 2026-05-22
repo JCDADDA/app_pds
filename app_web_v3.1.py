@@ -54,7 +54,7 @@ def bloquear_enter():
 # =============================================================
 TABELAS = {
     "receitas": ["id", "data_registro_sistema", "data_receita", "agencia", "conta_corrente", "origem_receita", "agencia_origem", "conta_origem", "natureza_receita", "valor", "nota_explicativa"],
-    "despesas": ["id", "data_registro_sistema", "data_despesa", "comprovante", "contrato", "cnpj_cpf", "agencia_pagadora", "conta_pagadora", "natureza_despesa", "valor", "nota_explicativa", "comprovante_nome_arquivo", "comprovante_drive_id", "comprovante_drive_link"],
+    "despesas": ["id", "data_registro_sistema", "data_despesa", "doc_comprovante", "contrato", "cnpj_cpf", "agencia_pagadora", "conta_pagadora", "natureza_despesa", "valor", "nota_explicativa", "comprovante_nome_arquivo", "comprovante_drive_id", "comprovante_drive_link"],
     "usuarios": ["id", "data_registro_sistema", "nome_completo", "data_nascimento", "cpf", "estado", "cidade", "rua", "numero", "bairro", "cep"],
     "bancos": ["id", "data_registro_sistema", "nome_banco", "numero_agencia", "numero_conta_corrente", "nome_conta"],
     "credores": ["id", "data_registro_sistema", "cnpj_cpf", "nome_credor", "estado", "cidade", "rua", "numero", "cep", "agencia_credor", "conta_credor"],
@@ -304,7 +304,7 @@ def tela_despesa():
         
         with col1:
             data_desp = st.date_input("Data da Despesa", format="DD/MM/YYYY")
-            comprovante = st.text_input("Comprovante:")
+            doc_comprovante = st.text_input("Nota fiscal/comprovante nº:")
             contrato = st.text_input("Contrato nº")
             
         with col2:
@@ -368,9 +368,10 @@ def tela_despesa():
             # Reúne TODOS os dados em um único dicionário para a tabela
             dados = {
                 "data_despesa": data_desp.strftime("%d/%m/%Y"),
-                "comprovante": comprovante,
+                "doc_comprovante": doc_comprovante,
                 "contrato": contrato,
-                "cnpj_cpf": cnpj_puro,
+                "cnpj_cpf": str(cnpj_puro),
+                #"cnpj_cpf": cnpj_puro,
                 "agencia_pagadora": agencia_deb,
                 "conta_pagadora": conta_deb,
                 "natureza_despesa": natureza_desp,
@@ -510,7 +511,7 @@ def tela_relatorio_despesa():
             'id': '', 
             'data_registro_sistema': 'TOTAL DA DESPESA',
             'data_despesa': "",
-            'comprovante': "",
+            'doc_comprovante': "",
             'contrato': "",
             'cnpj_cpf': "",
             'agencia_pagadora': "",
