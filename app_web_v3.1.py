@@ -71,7 +71,7 @@ TABELAS = {
 #    ]
 #    return Credentials.from_service_account_info(dados_credenciais, scopes=escopos)
 
-@st.cache_resource(ttl="24h") # No dia 28/05/2026 o Aplicativo deixou de funcionar. Descobri que era o token que precisava ser renovado a cada 1 hora.
+@st.cache_resource(ttl="1h") # No dia 28/05/2026 o Aplicativo deixou de funcionar. Descobri que era o token que precisava ser renovado a cada 1 hora.
 def criar_credenciais_google():
     """Cria credencial usando o Token OAuth do usuário (Conta de 5TB)."""
     # Puxamos o dicionário do secrets e transformamos a chave
@@ -86,14 +86,14 @@ def criar_credenciais_google():
     return Credentials.from_authorized_user_info(dados_token, scopes=escopos)
 
 
-@st.cache_resource(ttl="24h") # No dia 28/05/2026 o Aplicativo deixou de funcionar. Descobri que era o token que precisava ser renovado a cada 1 hora.
+@st.cache_resource(ttl="1h") # No dia 28/05/2026 o Aplicativo deixou de funcionar. Descobri que era o token que precisava ser renovado a cada 1 hora.
 def conectar_planilha():
     credenciais = criar_credenciais_google()
     cliente = gspread.authorize(credenciais)
     return cliente.open("base_dados_partido") # O nome exato da sua planilha no Google Drive
 
 
-@st.cache_resource(ttl="24h") # No dia 28/05/2026 o Aplicativo deixou de funcionar. Descobri que era o token que precisava ser renovado a cada 1 hora.
+@st.cache_resource(ttl="1h") # No dia 28/05/2026 o Aplicativo deixou de funcionar. Descobri que era o token que precisava ser renovado a cada 1 hora.
 def conectar_drive():
     """Conecta na API do Google Drive usando a mesma conta de serviço."""
     credenciais = criar_credenciais_google()
