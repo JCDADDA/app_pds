@@ -8,8 +8,8 @@ import re
 
 import pandas as pd 
 import gspread
-#from google.oauth2.service_account import Credentials
-from google.oauth2.credentials import Credentials
+from google.oauth2.service_account import Credentials
+#from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 
@@ -61,29 +61,29 @@ TABELAS = {
     "colaboradores": ["id", "data_registro_sistema", "cpf", "data_nascimento", "nome_completo", "estado", "cidade", "rua", "numero", "cep", "carteira_trabalho"]
 }
 
-#@st.cache_resource
-#def criar_credenciais_google():
-#    """Cria uma credencial única para Google Sheets e Google Drive."""
-#    dados_credenciais = st.secrets["gcp_service_account"]
-#    escopos = [
-#        "https://www.googleapis.com/auth/spreadsheets",
-#        "https://www.googleapis.com/auth/drive",
-#    ]
-#    return Credentials.from_service_account_info(dados_credenciais, scopes=escopos)
-
-@st.cache_resource(ttl="1h") # No dia 28/05/2026 o Aplicativo deixou de funcionar. Descobri que era o token que precisava ser renovado a cada 1 hora.
+@st.cache_resource(ttl="1h")
 def criar_credenciais_google():
-    """Cria credencial usando o Token OAuth do usuário (Conta de 5TB)."""
-    # Puxamos o dicionário do secrets e transformamos a chave
-    dados_token = dict(st.secrets["google_oauth_token"])
-    
+    """Cria uma credencial única para Google Sheets e Google Drive."""
+    dados_credenciais = st.secrets["gcp_service_account"]
     escopos = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
     ]
-    
-    # Gera as credenciais dizendo: "Eu sou o dono da conta"
-    return Credentials.from_authorized_user_info(dados_token, scopes=escopos)
+    return Credentials.from_service_account_info(dados_credenciais, scopes=escopos)
+
+#@st.cache_resource(ttl="1h") # No dia 28/05/2026 o Aplicativo deixou de funcionar. Descobri que era o token que precisava ser renovado a cada 1 hora.
+#def criar_credenciais_google():
+#    """Cria credencial usando o Token OAuth do usuário (Conta de 5TB)."""
+#    # Puxamos o dicionário do secrets e transformamos a chave
+#    dados_token = dict(st.secrets["google_oauth_token"])
+#    
+#    escopos = [
+#        "https://www.googleapis.com/auth/spreadsheets",
+#        "https://www.googleapis.com/auth/drive",
+#    ]
+#    
+#    # Gera as credenciais dizendo: "Eu sou o dono da conta"
+#    return Credentials.from_authorized_user_info(dados_token, scopes=escopos)
 
 
 @st.cache_resource(ttl="1h") # No dia 28/05/2026 o Aplicativo deixou de funcionar. Descobri que era o token que precisava ser renovado a cada 1 hora.
