@@ -71,10 +71,10 @@ TABELAS = {
 #    ]
 #    return Credentials.from_service_account_info(dados_credenciais, scopes=escopos)
 
-@st.cache_resource(ttl="1h") # No dia 28/05/2026 o Aplicativo deixou de funcionar. Descobri que era o token que precisava ser renovado a cada 1 hora.
+@st.cache_resource(ttl="1h")
 def criar_credenciais_google():
     """Cria credencial usando o Token OAuth do usuário (Conta de 5TB)."""
-    # Puxamos o dicionário do secrets e transformamos a chave
+    # AQUI ESTÁ A CORREÇÃO: Mudamos para buscar o google_oauth_token
     dados_token = dict(st.secrets["google_oauth_token"])
     
     escopos = [
