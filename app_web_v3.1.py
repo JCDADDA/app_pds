@@ -27,7 +27,7 @@ extrato_bancario_pca = pd.read_excel(extrato_bancario_pca)
 # =============================================================
 # CONFIGURAÇÃO INICIAL DA PÁGINA WEB
 # =============================================================
-st.set_page_config(page_title="Gestão Partidária", page_icon="🏛️", layout="centered")
+st.set_page_config(page_title="Prestador de Contas", page_icon="🏛️", layout="centered")
 
 # =============================================================
 # FUNÇÃO PARA BLOQUEAR O "ENTER" NOS FORMULÁRIOS
